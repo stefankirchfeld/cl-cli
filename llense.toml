@@ -1,3 +1,4 @@
 [[entry_points]]
 src_dir = "src"
 output = "build/cl-bin"
+cflags = "-DUSE_LLENSE"

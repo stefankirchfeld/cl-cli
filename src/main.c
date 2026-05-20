@@ -1,10 +1,10 @@
 #include "claude.h"
+#include "compat.h"
 #include "config.h"
 #include "context.h"
 #include "interactive.h"
 #include "pipe.h"
 
-#include <llense/libcurl/curl/curl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

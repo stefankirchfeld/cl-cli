@@ -1,8 +1,7 @@
 #include "claude.h"
+#include "compat.h"
 #include "config.h"
 
-#include <llense/libcurl/curl/curl.h>
-#include <llense/libjansson/jansson.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
