@@ -3,9 +3,9 @@
 #define CL_HISTORY_MAX 100
 
 typedef struct {
-    char **entries;   /* oldest first */
-    int    count;
-    int    pos;       /* current browse position, -1 = not browsing */
+  char **entries; /* oldest first */
+  int count;
+  int pos; /* current browse position, -1 = not browsing */
 } History;
 
 /* Load history from ~/.config/cl/history. Returns heap-allocated History. */
