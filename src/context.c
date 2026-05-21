@@ -4,62 +4,34 @@
 #include <stdlib.h>
 #include <string.h>
 
-char *context_collect(const Config *config) {
-  size_t cap = 4096;
-  size_t len = 0;
-  char *buf = malloc(cap);
-  if (!buf)
-    return strdup("");
-  buf[0] = '\0';
+#include "utils/datastructures.h"
+#include "utils/shell.h"
 
-  for (int i = 0; i < config->context_commands_count; i++) {
-    const char *cmd = config->context_commands[i];
+char* context_collect(const Config* config) {
+  int n = config->context_commands_count;
+  if (n == 0) return strdup("");
 
-    FILE *fp = popen(cmd, "r");
-    if (!fp)
-      continue;
+  /* collect "$ cmd\n" headers and outputs as alternating parts */
+  int nparts = n * 2;
+  char** parts = malloc(sizeof(char*) * nparts);
+  char** headers = malloc(sizeof(char*) * n);
 
-    /* append header */
+  for (int i = 0; i < n; i++) {
+    const char* cmd = config->context_commands[i];
     char header[CL_MAX_STR + 32];
-    int hlen = snprintf(header, sizeof(header), "$ %s\n", cmd);
-    if (len + (size_t)hlen + 1 > cap) {
-      cap = (len + (size_t)hlen + 1) * 2;
-      buf = realloc(buf, cap);
-      if (!buf) {
-        pclose(fp);
-        return strdup("");
-      }
-    }
-    memcpy(buf + len, header, (size_t)hlen);
-    len += (size_t)hlen;
-
-    /* append output */
-    char tmp[4096];
-    size_t n;
-    while ((n = fread(tmp, 1, sizeof(tmp), fp)) > 0) {
-      if (len + n + 1 > cap) {
-        cap = (len + n + 1) * 2;
-        buf = realloc(buf, cap);
-        if (!buf) {
-          pclose(fp);
-          return strdup("");
-        }
-      }
-      memcpy(buf + len, tmp, n);
-      len += n;
-    }
-    pclose(fp);
-
-    /* separator between commands */
-    if (len + 2 > cap) {
-      cap = (len + 2) * 2;
-      buf = realloc(buf, cap);
-      if (!buf)
-        return strdup("");
-    }
-    buf[len++] = '\n';
-    buf[len] = '\0';
+    snprintf(header, sizeof(header), "$ %s\n", cmd);
+    headers[i] = strdup(header);
+    parts[i * 2] = headers[i];
+    parts[i * 2 + 1] = read_popen(cmd);
   }
 
-  return buf;
+  char* result = join((const char**)parts, nparts, "\n");
+
+  for (int i = 0; i < n; i++) {
+    free(headers[i]);
+    free(parts[i * 2 + 1]);
+  }
+  free(headers);
+  free(parts);
+  return result;
 }

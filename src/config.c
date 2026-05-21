@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "utils/datastructures.h"
+
 Config *config_load(void) {
   Config *c = calloc(1, sizeof(*c));
   if (!c)
@@ -82,13 +84,13 @@ Config *config_load(void) {
       is_array = 1;
     }
 
-    if (strcmp(section, "claude") == 0) {
-      if (strcmp(key, "api_key") == 0)
+    if (str_equals(section, "claude")) {
+      if (str_equals(key, "api_key"))
         snprintf(c->api_key, sizeof(c->api_key), "%s", val);
-      else if (strcmp(key, "model") == 0)
+      else if (str_equals(key, "model"))
         snprintf(c->model, sizeof(c->model), "%s", val);
-    } else if (strcmp(section, "context") == 0) {
-      if (is_array && strcmp(key, "commands") == 0) {
+    } else if (str_equals(section, "context")) {
+      if (is_array && str_equals(key, "commands")) {
         if (c->context_commands_count < CL_MAX_CONTEXT_CMDS) {
           snprintf(c->context_commands[c->context_commands_count], CL_MAX_STR,
                    "%s", val);

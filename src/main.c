@@ -4,6 +4,7 @@
 #include "context.h"
 #include "interactive.h"
 #include "pipe.h"
+#include "utils/datastructures.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,7 +27,7 @@ int main(int argc, char **argv) {
   int first_arg = 1;
 
   if (argc > 1 &&
-      (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0)) {
+      (str_equals(argv[1], "--help") || str_equals(argv[1], "-h"))) {
     puts(
         "Usage: cl [-f] [prompt...]\n"
         "\n"
@@ -71,7 +72,7 @@ int main(int argc, char **argv) {
     return 0;
   }
 
-  if (argc > 1 && strcmp(argv[1], "-f") == 0) {
+  if (argc > 1 && str_equals(argv[1], "-f")) {
     freetext = 1;
     first_arg = 2;
   }
