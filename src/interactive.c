@@ -1,7 +1,4 @@
 #include "interactive.h"
-#include "claude.h"
-#include "history.h"
-#include "response.h"
 
 #include <dirent.h>
 #include <stdio.h>
@@ -12,11 +9,15 @@
 #include <termios.h>
 #include <unistd.h>
 
+#include "claude.h"
+#include "history.h"
+#include "response.h"
+
 #define CL_MAX_INPUT 512
 #define NUM_COMPLETIONS 3
 #define DEBOUNCE_MS 1000
 #define MAX_COMPLETION_LEN 1024
-
+#define ESC_KEY 0x1b
 /* ── terminal helpers ────────────────────────────────────────────────────────
  */
 
@@ -37,11 +38,10 @@ static void term_raw(void) {
 }
 
 static void clear_lines(int lines) {
-  for (int i = 0; i < lines; i++)
-    fputs("\033[A\033[2K", stderr);
+  for (int i = 0; i < lines; i++) fputs("\033[A\033[2K", stderr);
 }
 
-static void draw(const char *input,
+static void draw(const char* input,
                  char completions[NUM_COMPLETIONS][MAX_COMPLETION_LEN],
                  int selected, int ncompletions) {
   fprintf(stderr, "\033[2K\r> %s\n", input);
@@ -56,17 +56,15 @@ static void draw(const char *input,
 /* ── directory listing for context ──────────────────────────────────────────
  */
 
-static char *ls_dir(const char *path) {
-  DIR *d = opendir(path);
-  if (!d)
-    return strdup("");
+static char* ls_dir(const char* path) {
+  DIR* d = opendir(path);
+  if (!d) return strdup("");
   size_t cap = 4096, len = 0;
-  char *buf = malloc(cap);
+  char* buf = malloc(cap);
   buf[0] = '\0';
-  struct dirent *e;
+  struct dirent* e;
   while ((e = readdir(d))) {
-    if (strcmp(e->d_name, ".") == 0 || strcmp(e->d_name, "..") == 0)
-      continue;
+    if (strcmp(e->d_name, ".") == 0 || strcmp(e->d_name, "..") == 0) continue;
     size_t nl = strlen(e->d_name);
     if (len + nl + 2 > cap) {
       cap *= 2;
@@ -84,13 +82,13 @@ static char *ls_dir(const char *path) {
 /* ── Claude fetch ────────────────────────────────────────────────────────────
  */
 
-static ClResponse *fetch_response(const Config *config, const char *context,
-                                  const char *cwd, const char *ls_cwd,
-                                  const char *ls_parent, const char *input,
+static ClResponse* fetch_response(const Config* config, const char* context,
+                                  const char* cwd, const char* ls_cwd,
+                                  const char* ls_parent, const char* input,
                                   int freetext) {
   size_t prompt_cap =
       strlen(context) + strlen(ls_cwd) + strlen(ls_parent) + 1024;
-  char *prompt = malloc(prompt_cap);
+  char* prompt = malloc(prompt_cap);
   snprintf(prompt, prompt_cap,
            "Current directory: %s\n"
            "%s"
@@ -99,16 +97,16 @@ static ClResponse *fetch_response(const Config *config, const char *context,
            "User input: \"%s\"",
            cwd, context[0] ? context : "", ls_cwd, ls_parent, input);
 
-  const char *sysprompt =
+  const char* sysprompt =
       freetext ? CL_SYSTEM_PROMPT_FREETEXT : CL_SYSTEM_PROMPT_STRICT;
-  char *raw =
+  char* raw =
       claude_complete(config->api_key, config->model, sysprompt, prompt);
   free(prompt);
   if (!raw) {
     fprintf(stderr, "cl: API call failed\n");
     return NULL;
   }
-  ClResponse *r = cl_response_parse(raw);
+  ClResponse* r = cl_response_parse(raw);
   free(raw);
   return r;
 }
@@ -116,8 +114,8 @@ static ClResponse *fetch_response(const Config *config, const char *context,
 /* ── main interactive loop ───────────────────────────────────────────────────
  */
 
-int interactive_mode(const Config *config, const char *context, int freetext,
-                     const char *initial) {
+int interactive_mode(const Config* config, const char* context, int freetext,
+                     const char* initial) {
   char input[CL_MAX_INPUT] = "";
   int input_len = 0;
   char completions[NUM_COMPLETIONS][MAX_COMPLETION_LEN] = {{0}};
@@ -132,14 +130,13 @@ int interactive_mode(const Config *config, const char *context, int freetext,
   }
 
   char cwd[512];
-  if (!getcwd(cwd, sizeof(cwd)))
-    snprintf(cwd, sizeof(cwd), ".");
+  if (!getcwd(cwd, sizeof(cwd))) snprintf(cwd, sizeof(cwd), ".");
   char parent[512];
   snprintf(parent, sizeof(parent), "%s/..", cwd);
-  char *ls_cwd = ls_dir(cwd);
-  char *ls_parent = ls_dir(parent);
+  char* ls_cwd = ls_dir(cwd);
+  char* ls_parent = ls_dir(parent);
 
-  History *hist = history_load();
+  History* hist = history_load();
 
   term_raw();
   fprintf(stderr, "> %s\n", input);
@@ -165,7 +162,7 @@ int interactive_mode(const Config *config, const char *context, int freetext,
         if (input_len > 0) {
           history_append(hist, input);
           hist->pos = -1;
-          ClResponse *resp = fetch_response(config, context, cwd, ls_cwd,
+          ClResponse* resp = fetch_response(config, context, cwd, ls_cwd,
                                             ls_parent, input, freetext);
           if (resp) {
             if (resp->type == CL_RESP_FREETEXT) {
@@ -200,22 +197,22 @@ int interactive_mode(const Config *config, const char *context, int freetext,
     }
 
     int ready = select(STDIN_FILENO + 1, &fds, NULL, NULL, &timeout);
-    if (ready <= 0)
-      continue;
+    if (ready <= 0) continue;
 
     unsigned char ch;
     int n = read(STDIN_FILENO, &ch, 1);
     if (n == 0) {
-        /* EOF (Ctrl+D) — treat as cancel */
-        clear_lines(drawn_lines);
-        free(ls_cwd); free(ls_parent);
-        history_free(hist);
-        return 1;
+      /* EOF (Ctrl+D) — treat as cancel */
+      clear_lines(drawn_lines);
+      free(ls_cwd);
+      free(ls_parent);
+      history_free(hist);
+      return 1;
     }
     if (n != 1) continue;
 
     /* escape sequences (arrow keys) */
-    if (ch == 0x1b) {
+    if (ch == ESC_KEY) {
       unsigned char seq[2];
       struct timeval t = {0, 50000};
       fd_set f;
@@ -231,8 +228,7 @@ int interactive_mode(const Config *config, const char *context, int freetext,
             if (ncompletions > 0) {
               selected = (selected - 1 + ncompletions) % ncompletions;
             } else if (hist->count > 0) {
-              if (hist->pos < 0)
-                hist->pos = hist->count;
+              if (hist->pos < 0) hist->pos = hist->count;
               if (hist->pos > 0) {
                 hist->pos--;
                 snprintf(input, sizeof(input), "%s", hist->entries[hist->pos]);
@@ -283,6 +279,8 @@ int interactive_mode(const Config *config, const char *context, int freetext,
         free(ls_parent);
         history_free(hist);
         return 0;
+      } else if (input_len) {
+        pending_fetch = 1;
       }
       continue;
     }
