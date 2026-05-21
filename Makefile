@@ -1,7 +1,7 @@
 CC      = cc
 CFLAGS  = -O2 -Wall -Isrc $(shell pkg-config --cflags jansson)
 LDFLAGS = $(shell pkg-config --libs jansson) -lcurl
-SRCS    = $(wildcard src/*.c)
+SRCS    = $(shell find src -name '*.c')
 
 build/cl-bin: $(SRCS)
 	mkdir -p build
