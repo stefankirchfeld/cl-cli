@@ -25,7 +25,7 @@ char* context_collect(const Config* config) {
     parts[i * 2 + 1] = read_popen(cmd);
   }
 
-  char* result = join((const char**)parts, nparts, "\n");
+  char* result = str_join((const char**)parts, nparts, "\n");
 
   for (int i = 0; i < n; i++) {
     free(headers[i]);

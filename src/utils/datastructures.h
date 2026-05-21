@@ -26,5 +26,5 @@ void vec_filter(const Vec* v, ImmutableVec* result, int (*predicate)(VecEntry));
 void immutable_vec_init(ImmutableVec* v);
 void immutable_vec_free(ImmutableVec* v);
 
-char* join(const char** parts, int n, const char* sep);
+char* str_join(const char** parts, int n, const char* sep);
 int str_equals(const char* one, const char* two);

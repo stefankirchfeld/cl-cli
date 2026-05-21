@@ -101,7 +101,7 @@ void vec_filter(const Vec* v, ImmutableVec* result,
   return;
 }
 
-char* join(const char** parts, int n, const char* sep) {
+char* str_join(const char** parts, int n, const char* sep) {
   size_t sep_len = strlen(sep);
   size_t total = 1;
   for (int i = 0; i < n; i++) total += strlen(parts[i]);
