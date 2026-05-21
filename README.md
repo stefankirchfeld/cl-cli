@@ -31,12 +31,19 @@ The linker cannot find -ljansson. Install it with: sudo pacman -S jansson
 
 ### Dependencies
 
-- [liblense](https://github.com/stefankirchfeld/liblense) — build system
 - `libcurl`
 - `jansson`
 
 ```bash
-sudo pacman -S libcurl jansson   # Arch / Manjaro
+# Arch / Manjaro
+sudo pacman -S libcurl jansson
+
+# Debian / Ubuntu
+sudo apt install libcurl4-openssl-dev libjansson-dev
+
+# macOS
+brew install jansson
+# libcurl is included with Xcode Command Line Tools
 ```
 
 ### Build
@@ -44,21 +51,22 @@ sudo pacman -S libcurl jansson   # Arch / Manjaro
 ```bash
 git clone https://github.com/stefankirchfeld/cl-cli
 cd cl-cli
-llense project register
-llense add libcurl
-llense add jansson
-llense build
+make
 ```
 
 The binary is written to `build/cl-bin`.
 
+> **Alternative:** If you use [liblense](https://github.com/stefankirchfeld/liblense), you can build with `llense project register && llense add libcurl && llense add jansson && llense build` instead.
+
 ### Setup
 
-1. Copy the binary somewhere on your PATH:
+1. Symlink the binary onto your PATH as `cl-bin` (the shell wrapper calls it by that name):
 
 ```bash
 ln -sf "$PWD/build/cl-bin" ~/.local/bin/cl-bin
 ```
+
+Make sure `~/.local/bin` is on your `$PATH`.
 
 2. Create your config file:
 
@@ -68,12 +76,21 @@ cp config.example.ini ~/.config/cl/config.ini
 # edit ~/.config/cl/config.ini and set your Anthropic API key
 ```
 
-3. Source the shell wrapper in your `~/.bashrc`:
+3. Source the shell wrapper.
 
+**Linux (bash):**
 ```bash
 echo 'source ~/src/cl-cli/shell/cl.bash' >> ~/.bashrc
 source ~/src/cl-cli/shell/cl.bash
 ```
+
+**macOS (zsh) / Linux with zsh:**
+```bash
+echo 'source ~/src/cl-cli/shell/cl.zsh' >> ~/.zshrc
+source ~/src/cl-cli/shell/cl.zsh
+```
+
+> **Shell script differences:** The bash wrapper (`cl.bash`) injects the result directly into the readline buffer using `READLINE_LINE`. The zsh wrapper (`cl.zsh`) uses a tmpfile because zsh widgets cannot redirect I/O the same way — `cl-bin` runs with `/dev/tty` attached for its TUI, writes the result to a temp file, and the widget reads it back into `$BUFFER`. Both expose the same `Ctrl+K` / `Ctrl+F` bindings and `cl` command.
 
 ## Usage
 
