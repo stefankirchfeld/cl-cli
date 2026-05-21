@@ -36,12 +36,26 @@ static void term_raw(void) {
   tcsetattr(STDIN_FILENO, TCSANOW, &raw);
 }
 
-static void clear_lines(int lines) {
-  for (int i = 0; i < lines; i++) fputs("\033[A\033[2K", stderr);
-}
+/* ANSI escape sequences */
+#define ANSI_ERASE_LINE "\033[2K"  /* erase entire current line */
+#define ANSI_COL0 "\r"             /* move to column 1 */
+#define ANSI_UP1 "\033[A"          /* move cursor up 1 line */
+#define ANSI_DOWN1 "\033[B"        /* move cursor down 1 line */
+#define ANSI_COL(n) "\033[" #n "G" /* move cursor to column n (literal int) */
+#define ANSI_COL_FMT "\033[%dG"    /* move cursor to column n (printf %d arg) */
+#define ANSI_REVERSE_VIDEO "\033[7m" /* swap fg/bg (highlight) */
+#define ANSI_ATTR_RESET "\033[m"     /* reset all attributes */
 
 #define CL_ORANGE "\033[38;5;208m"
-#define CL_RESET "\033[m"
+#define CL_RESET ANSI_ATTR_RESET
+
+static void clear_lines(int lines) {
+  /* Cursor is on the input line (top of the drawn block). Move down to the
+     bottom, then erase each line while walking back up to the input line. */
+  for (int i = 1; i < lines; i++) fputs(ANSI_DOWN1, stderr);
+  for (int i = 1; i < lines; i++) fputs(ANSI_ERASE_LINE ANSI_UP1, stderr);
+  fputs(ANSI_ERASE_LINE, stderr);
+}
 
 static void draw_free_text(const char* input, const char* text,
                            const char* model) {
@@ -49,16 +63,33 @@ static void draw_free_text(const char* input, const char* text,
           text);
 }
 
+/* Returns the column (1-based) where the cursor should sit after the prompt. */
+static int prompt_cursor_col(const char* model, const char* input) {
+  /* " model > input" — column = 1 + len(" ") + len(model) + len(" > ") +
+   * len(input) */
+  return 1 + 1 + (int)strlen(model) + 3 + (int)strlen(input);
+}
+
 static void draw(const char* input,
                  char completions[NUM_COMPLETIONS][MAX_COMPLETION_LEN],
-                 int selected, int ncompletions, const char* model) {
-  fprintf(stderr, "\033[2K\r " CL_ORANGE "%s" CL_RESET " > %s\n", model, input);
+                 int selected, int ncompletions, const char* model,
+                 int fetching) {
+  fprintf(stderr,
+          ANSI_ERASE_LINE ANSI_COL0 " " CL_ORANGE "%s" CL_RESET " > %s %s\n",
+          model, input, fetching ? "(fetching...)" : "");
   for (int i = 0; i < ncompletions; i++) {
     if (i == selected)
-      fprintf(stderr, "\033[2K\r  \033[7m %s \033[m\n", completions[i]);
+      fprintf(stderr,
+              ANSI_ERASE_LINE ANSI_COL0 "  " ANSI_REVERSE_VIDEO
+                                        " %s " ANSI_ATTR_RESET "\n",
+              completions[i]);
     else
-      fprintf(stderr, "\033[2K\r    %s\n", completions[i]);
+      fprintf(stderr, ANSI_ERASE_LINE ANSI_COL0 "    %s\n", completions[i]);
   }
+  /* Move cursor back up to the input line (1 for the \n after the input line,
+     plus ncompletions lines printed after it) and position after typed text. */
+  for (int i = 0; i < ncompletions + 1; i++) fputs(ANSI_UP1, stderr);
+  fprintf(stderr, ANSI_COL_FMT, prompt_cursor_col(model, input));
 }
 
 /* ── main interactive loop ───────────────────────────────────────────────────
@@ -82,8 +113,8 @@ int interactive_mode(const Config* config, const char* context, int freetext,
   History* hist = history_load();
 
   term_raw();
-  fprintf(stderr, "\n " CL_ORANGE "%s" CL_RESET " > %s\n", config->model,
-          input);
+  fprintf(stderr, "\n " CL_ORANGE "%s" CL_RESET " > %s\n" ANSI_UP1 "\033[%dG",
+          config->model, input, prompt_cursor_col(config->model, input));
 
   /* if pre-populated, trigger fetch immediately */
   struct timeval last_key = {0};
@@ -106,6 +137,8 @@ int interactive_mode(const Config* config, const char* context, int freetext,
         if (input_len > 0) {
           history_append(hist, input);
           hist->pos = -1;
+          clear_lines(drawn_lines);
+          draw(input, completions, selected, ncompletions, config->model, 1);
           ClResponse* resp = fetch_response(config, context, input, freetext);
           if (resp) {
             if (resp->type == CL_RESP_FREETEXT) {
@@ -118,7 +151,8 @@ int interactive_mode(const Config* config, const char* context, int freetext,
               /* draw_free_text left cursor after its output; draw fresh prompt
                */
               drawn_lines = 1;
-              draw(input, completions, selected, ncompletions, config->model);
+              draw(input, completions, selected, ncompletions, config->model,
+                   0);
               cl_response_free(resp);
               continue;
             } else if (resp->type == CL_RESP_COMPLETIONS && resp->nlines > 0) {
@@ -133,7 +167,7 @@ int interactive_mode(const Config* config, const char* context, int freetext,
         }
         clear_lines(drawn_lines);
         drawn_lines = 1 + ncompletions;
-        draw(input, completions, selected, ncompletions, config->model);
+        draw(input, completions, selected, ncompletions, config->model, 0);
         continue;
       }
       timeout.tv_sec = remaining / 1000;
@@ -151,6 +185,7 @@ int interactive_mode(const Config* config, const char* context, int freetext,
     if (n == 0) {
       /* EOF (Ctrl+D) — treat as cancel */
       clear_lines(drawn_lines);
+      fputs("\r\n", stderr);
       history_free(hist);
       return 1;
     }
@@ -199,7 +234,7 @@ int interactive_mode(const Config* config, const char* context, int freetext,
           }
           clear_lines(drawn_lines);
           drawn_lines = 1 + ncompletions;
-          draw(input, completions, selected, ncompletions, config->model);
+          draw(input, completions, selected, ncompletions, config->model, 0);
         }
       }
       continue;
@@ -208,6 +243,7 @@ int interactive_mode(const Config* config, const char* context, int freetext,
     /* ctrl-c: cancel */
     if (ch == 3) {
       clear_lines(drawn_lines);
+      fputs("\r\n", stderr);
       history_free(hist);
       return 1;
     }
@@ -216,6 +252,7 @@ int interactive_mode(const Config* config, const char* context, int freetext,
     if (ch == '\r' || ch == '\n') {
       if (ncompletions > 0) {
         clear_lines(drawn_lines);
+        fputs("\r\n", stderr);
         fputs(completions[selected], stdout);
         fflush(stdout);
         history_free(hist);
@@ -245,6 +282,6 @@ int interactive_mode(const Config* config, const char* context, int freetext,
 
     clear_lines(drawn_lines);
     drawn_lines = 1 + ncompletions;
-    draw(input, completions, selected, ncompletions, config->model);
+    draw(input, completions, selected, ncompletions, config->model, 0);
   }
 }
